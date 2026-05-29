@@ -27,3 +27,6 @@ build/
 
 # Generated, on-demand artifacts
 timesheet-out/
+
+# Playwright test artifacts
+.playwright-mcp/
