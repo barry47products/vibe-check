@@ -1,28 +1,39 @@
 # Vibe Check
 
-A personal work-log assistant for Barry, contracted through Afrolabs and embedded at Acme Bank. Vibe Check interviews Barry in Slack each day, classifies the work into one of five structured shapes, and produces:
+A single-user work-log assistant. It runs a short daily interview over Slack, classifies each entry into one of five structured shapes, and produces three outputs:
 
-1. **Per-day markdown logs** in `~/vibe-check-logs/` (the source of truth, auto-committed).
-2. **A daily Slack bulletin** to a configured channel — the Afrolabs signal.
-3. **A monthly CSV + markdown timesheet** for the invoice.
+- **Daily markdown logs** in `~/vibe-check-logs/` — the source of truth, auto-committed to a local git repository.
+- **A daily Slack bulletin** posted to a configured channel.
+- **A monthly timesheet** (CSV and markdown) for invoicing.
 
-## Architecture
+The conversational pipeline runs on Open Chat Studio (OCS). This repository holds the Python helpers, entry-shape definitions, and generated schemas that the pipeline depends on.
 
-- **OCS** (Open Chat Studio, already running locally) hosts the interview pipeline and Slack channel.
-- **Python helpers in `helpers/`** handle deterministic work: git/Jira scraping, log writing, bulletin rendering, monthly aggregation. The helpers know nothing about OCS — they're imported by OCS Python Nodes (or called from any Python context).
-- **Pydantic models in `helpers/types.py`** are the single source of truth for entry shapes. JSON Schemas in `schemas/` are generated from them (`uv run python scripts/generate_schemas.py`) and consumed by OCS's Extract Structured Data node.
+## How it works
+
+OCS hosts the interview pipeline and the Slack integration. Its Python Nodes call into the helpers in this repository for all deterministic work: scraping git and Jira activity, writing log files, rendering the bulletin, and aggregating the monthly timesheet. The helpers have no knowledge of OCS and can be imported from any Python context.
+
+Entry shapes are defined as Pydantic models in `helpers/types.py`, which are the single source of truth. The JSON Schemas in `schemas/` are generated from those models and consumed by the OCS Extract Structured Data node; they are never edited by hand.
+
+The five entry shapes are `deep-work`, `learning`, `meeting`, `offsite`, and `ops`.
 
 See [docs/superpowers/specs/2026-05-28-vibe-check-design.md](docs/superpowers/specs/2026-05-28-vibe-check-design.md) for the full design and rationale.
+
+## Requirements
+
+- Python 3.12+
+- [uv](https://docs.astral.sh/uv/)
+- A running OCS instance, for the conversational pipeline
+- A Jira API token, for activity scraping
 
 ## Setup
 
 ```bash
 uv sync
-cp .env.example .env       # then fill in JIRA_TOKEN, etc.
-uv run pytest              # run the test suite
+cp .env.example .env      # then fill in JIRA_TOKEN and related values
+uv run pytest             # run the test suite
 ```
 
-## Regenerate JSON Schemas
+## Regenerating schemas
 
 After any change to `helpers/types.py`:
 
@@ -31,23 +42,27 @@ uv run python scripts/generate_schemas.py
 uv run pytest tests/test_schemas_in_sync.py
 ```
 
-Then re-import the affected shapes into the OCS Extract node and re-export the pipeline JSON to `ocs/pipelines/interview.json`.
+Then re-import the affected shapes into the OCS Extract node and re-export the pipeline to `ocs/pipelines/interview.json`. `test_schemas_in_sync.py` fails if the committed schemas drift from the models.
 
-## Layout
+## Project layout
 
-- `helpers/` — Python helpers (one file per responsibility). All TDD.
-- `tests/` — pytest, mirrors `helpers/`.
-- `schemas/` — generated JSON Schemas for OCS's Extract node. **Do not edit by hand.**
-- `scripts/generate_schemas.py` — regenerates `schemas/` from `helpers/types.py`.
-- `ocs/pipelines/` — exported OCS pipeline JSON.
-- `ocs/prompts/` — system and routing prompts used inside the pipeline.
-- `~/vibe-check-logs/` (outside this repo) — daily markdown files, local git repo, auto-committed.
+| Path                          | Contents                                                              |
+| ----------------------------- | --------------------------------------------------------------------- |
+| `helpers/`                    | Deterministic Python helpers, one responsibility per file.            |
+| `tests/`                      | pytest suite, organised by behaviour.                                 |
+| `schemas/`                    | Generated JSON Schemas for the OCS Extract node. Do not edit by hand. |
+| `scripts/generate_schemas.py` | Regenerates `schemas/` from `helpers/types.py`.                       |
+| `ocs/pipelines/`              | Exported OCS pipeline JSON.                                           |
+| `ocs/prompts/`                | System and routing prompts used in the pipeline.                      |
+| `docs/`                       | Design spec and runbooks.                                             |
 
-## Conventions
+Daily logs live outside this repository in `~/vibe-check-logs/`, a separate local git repository.
 
-See [CLAUDE.md](CLAUDE.md) for full conventions. Highlights:
+## Development
 
-- TDD on helpers, strictly.
-- Pydantic models are the source of truth. Schemas are generated.
-- Hard fail on source-ingestion errors (git, Jira) — don't log without context.
-- Helpers never import anything OCS-shaped.
+See [CLAUDE.md](CLAUDE.md) for the full conventions. Key points:
+
+- Helpers are developed test-first.
+- Pydantic models are the source of truth; schemas are generated, never hand-edited.
+- Git and Jira ingestion fail hard on error rather than logging without context.
+- Helpers never import anything OCS-specific.
