@@ -1,0 +1,136 @@
+{
+  "$defs": {
+    "LinkedSignal": {
+      "additionalProperties": false,
+      "description": "A reference to an external signal that motivated this entry.",
+      "properties": {
+        "kind": {
+          "enum": [
+            "git",
+            "jira"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "ref": {
+          "minLength": 1,
+          "title": "Ref",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "ref"
+      ],
+      "title": "LinkedSignal",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "client": {
+      "minLength": 1,
+      "title": "Client",
+      "type": "string"
+    },
+    "date": {
+      "format": "date",
+      "title": "Date",
+      "type": "string"
+    },
+    "duration_hours": {
+      "exclusiveMinimum": 0,
+      "title": "Duration Hours",
+      "type": "number"
+    },
+    "id": {
+      "minLength": 1,
+      "title": "Id",
+      "type": "string"
+    },
+    "linked_signals": {
+      "items": {
+        "$ref": "#/$defs/LinkedSignal"
+      },
+      "title": "Linked Signals",
+      "type": "array"
+    },
+    "location": {
+      "minLength": 1,
+      "title": "Location",
+      "type": "string"
+    },
+    "narrative": {
+      "minLength": 1,
+      "title": "Narrative",
+      "type": "string"
+    },
+    "needs_review": {
+      "default": false,
+      "title": "Needs Review",
+      "type": "boolean"
+    },
+    "outcomes": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Outcomes",
+      "type": "array"
+    },
+    "project": {
+      "minLength": 1,
+      "title": "Project",
+      "type": "string"
+    },
+    "purpose": {
+      "minLength": 1,
+      "title": "Purpose",
+      "type": "string"
+    },
+    "shape": {
+      "const": "offsite",
+      "title": "Shape",
+      "type": "string"
+    },
+    "tags": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Tags",
+      "type": "array"
+    },
+    "title": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Title",
+      "type": "string"
+    },
+    "travel_hours_separate": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Travel Hours Separate"
+    }
+  },
+  "required": [
+    "id",
+    "date",
+    "shape",
+    "duration_hours",
+    "client",
+    "project",
+    "title",
+    "narrative",
+    "location",
+    "purpose"
+  ],
+  "title": "OffsiteEntry",
+  "type": "object"
+}

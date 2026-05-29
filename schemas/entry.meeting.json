@@ -1,0 +1,159 @@
+{
+  "$defs": {
+    "ActionItem": {
+      "additionalProperties": false,
+      "properties": {
+        "item": {
+          "minLength": 1,
+          "title": "Item",
+          "type": "string"
+        },
+        "owner": {
+          "minLength": 1,
+          "title": "Owner",
+          "type": "string"
+        }
+      },
+      "required": [
+        "owner",
+        "item"
+      ],
+      "title": "ActionItem",
+      "type": "object"
+    },
+    "LinkedSignal": {
+      "additionalProperties": false,
+      "description": "A reference to an external signal that motivated this entry.",
+      "properties": {
+        "kind": {
+          "enum": [
+            "git",
+            "jira"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "ref": {
+          "minLength": 1,
+          "title": "Ref",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "ref"
+      ],
+      "title": "LinkedSignal",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "action_items": {
+      "items": {
+        "$ref": "#/$defs/ActionItem"
+      },
+      "title": "Action Items",
+      "type": "array"
+    },
+    "attendees": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Attendees",
+      "type": "array"
+    },
+    "client": {
+      "minLength": 1,
+      "title": "Client",
+      "type": "string"
+    },
+    "date": {
+      "format": "date",
+      "title": "Date",
+      "type": "string"
+    },
+    "decisions": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Decisions",
+      "type": "array"
+    },
+    "duration_hours": {
+      "exclusiveMinimum": 0,
+      "title": "Duration Hours",
+      "type": "number"
+    },
+    "id": {
+      "minLength": 1,
+      "title": "Id",
+      "type": "string"
+    },
+    "linked_signals": {
+      "items": {
+        "$ref": "#/$defs/LinkedSignal"
+      },
+      "title": "Linked Signals",
+      "type": "array"
+    },
+    "meeting_type": {
+      "enum": [
+        "1:1",
+        "standup",
+        "review",
+        "workshop",
+        "interview",
+        "other"
+      ],
+      "title": "Meeting Type",
+      "type": "string"
+    },
+    "narrative": {
+      "minLength": 1,
+      "title": "Narrative",
+      "type": "string"
+    },
+    "needs_review": {
+      "default": false,
+      "title": "Needs Review",
+      "type": "boolean"
+    },
+    "project": {
+      "minLength": 1,
+      "title": "Project",
+      "type": "string"
+    },
+    "shape": {
+      "const": "meeting",
+      "title": "Shape",
+      "type": "string"
+    },
+    "tags": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Tags",
+      "type": "array"
+    },
+    "title": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Title",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "date",
+    "shape",
+    "duration_hours",
+    "client",
+    "project",
+    "title",
+    "narrative",
+    "meeting_type"
+  ],
+  "title": "MeetingEntry",
+  "type": "object"
+}

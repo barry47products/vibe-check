@@ -1,0 +1,2 @@
+# The exported interview.json lives here once the smoke-test pipeline is built in OCS.
+# See docs/superpowers/specs/2026-05-28-vibe-check-design.md §7 for the pipeline shape.
