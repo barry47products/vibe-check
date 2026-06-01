@@ -1,7 +1,12 @@
 # Vibe Check — Design
 
+> **⚠️ SUPERSEDED (2026-06-01).** This work-log-interviewer design has been replaced by
+> the Mirror design at `2026-06-01-vibe-check-mirror-design.md`. Kept for history; its
+> tested helpers (`git_scrape`, `jira_fetch`) and Pydantic discipline are reused there.
+> Do not build from this document.
+
 **Date:** 2026-05-28
-**Status:** Draft, pending user review
+**Status:** Superseded by `2026-06-01-vibe-check-mirror-design.md`
 **Owner:** Barry Tandy
 **Audience:** Barry (V1 user), with Afrolabs (David) as the bulletin recipient
 
