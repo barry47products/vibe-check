@@ -542,3 +542,39 @@ trap, all-code-in-`main`, no leading underscores, no tuple-unpack, braces in LLM
 Per the design roadmap (§13): **NVC reflection in the heartbeat** (Option 3), **escalation
 nudges** (Slack→WhatsApp→call), **discovery** of unmentioned work, **non-GitHub sources**, and
 **personas / flight levels**. Each gets its own manual when we reach it.
+
+## Portability / multi-workspace (future work)
+
+The current build is **single-workspace by hardcode**. Before running VibeCheck in another Slack
+workspace (or for any multi-user/multi-tenant rollout), these need to become per-workspace /
+per-participant rather than fixed:
+
+- **Slack app distribution** — must be enabled to install outside the dev workspace.
+- **Per workspace:** its own OAuth install + messaging provider + a chatbot Slack channel
+  (all-channels) whose provider holds that workspace's `slack_team_id` (that's how OCS routes
+  inbound events). Each new participant starts with **no contexts** — seed or add them.
+- **The salute post is workspace-A-bound** — `Reply · Post` hardcodes channel `C0B6S0T2NES` and
+  the `slack-vibe-check` Bearer token (workspace A's bot token). For another workspace the
+  conversation/draft works but the **post fails**; the post target (channel + token) must be
+  resolved per workspace/participant.
+- **Keys & providers to verify per instance:** GitHub token scope (all-repos vs select),
+  LLM provider/model availability (the `claude-opus-4-7`-invalid lesson — pin a model the key
+  has), Slack `chat:write` token per workspace, and a stable public URL (ngrok static domain).
+
+Treat the salute target and these credentials as configuration, not constants, when this moves
+beyond one workspace.
+
+## Pin the heartbeat to the DM session (future work)
+
+The morning nudge fires into `participant.get_latest_session(experiment)` — the _most recent_
+session, whichever channel it's on. So if you ever converse with the bot in a **channel**
+(an `@mention` creates a channel session that becomes "latest"), the next nudge lands there
+instead of your DM. The salute _post_ to a channel is an API call and creates no session, so it
+doesn't cause drift — only _talking to_ the bot in a channel does.
+
+**Workaround today:** keep conversations in the DM; use channels only as salute destinations.
+
+**The fix (small OCS change):** make the heartbeat target a fixed DM session rather than
+"latest" — either store the target session on the `ScheduledMessage`, or filter
+`get_latest_session` to DM channels (`channel_id` starting with `D`). Same flavour as the
+portability items: make an implicit/hardcoded thing explicit. Reasonable Dimagi feature request.
