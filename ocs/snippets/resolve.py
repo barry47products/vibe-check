@@ -90,19 +90,20 @@ def main(input, **kwargs):
         after = text[lower.index("context") + 7:]
         repos = []
         pair = 2  # owner/repo
+        junk = "<>`'\" "  # Slack/markdown wrappers: angle brackets, backticks, quotes, spaces
         for raw in after.replace(",", " ").replace(" and ", " ").split():
-            tok = raw.strip().strip("<>").strip(".").strip()
+            tok = raw.strip(junk).strip(".").strip(junk)
             if "|" in tok:  # Slack formats links as <url|label>; keep the url
-                tok = tok.split("|", 1)[0].strip("<>").strip()
+                tok = tok.split("|", 1)[0].strip(junk)
             lt = tok.lower()
             if "github.com/" in lt:
                 parts = tok.split("github.com/", 1)[1].strip("/").split("/")
                 if len(parts) >= pair:
-                    owner = parts[0].strip("<>")
-                    repo = parts[1].replace(".git", "").strip("<>")
+                    owner = parts[0].strip(junk)
+                    repo = parts[1].replace(".git", "").strip(junk)
                     repos.append(owner + "/" + repo)
             elif tok.count("/") == 1 and "." not in tok.split("/")[0]:
-                repos.append(tok.strip("<>"))
+                repos.append(tok.strip(junk))
         if not repos:
             return None
         # name = text after 'context' up to the first connector word / repo / URL
