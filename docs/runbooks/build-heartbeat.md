@@ -566,11 +566,24 @@ beyond one workspace.
 
 ## Pin the heartbeat to the DM session (future work)
 
-The morning nudge fires into `participant.get_latest_session(experiment)` — the _most recent_
-session, whichever channel it's on. So if you ever converse with the bot in a **channel**
-(an `@mention` creates a channel session that becomes "latest"), the next nudge lands there
-instead of your DM. The salute _post_ to a channel is an API call and creates no session, so it
-doesn't cause drift — only _talking to_ the bot in a channel does.
+**Behaviour: the heartbeat follows your last session.** The morning nudge fires into
+`participant.get_latest_session(experiment)` — your _most recent_ conversation with the bot,
+whatever channel that was. So the nudge effectively **follows you to wherever you last started a
+chat with VibeCheck**:
+
+- Last talked to it in your **DM** → tomorrow's nudge lands in the DM (the intended home).
+- **@mention it in a channel** → that becomes your latest session → the _next_ nudge appears
+  in that channel instead, and trails you there until you DM it again.
+
+Two nuances:
+
+- **It's the last _session_, not the last _message_.** A session is created when you _start_ a
+  thread/DM/channel conversation; replying within a thread keeps the same session. So it sticks
+  where you last _began_ a chat, and only moves when you open a new thread or mention it
+  elsewhere.
+- **The salute _post_ doesn't move and doesn't cause drift.** Posting to the team channel is an
+  API call (`chat.postMessage`) that creates no session — the destination is fixed, and only
+  _talking to_ the bot in a channel shifts where the nudge lands.
 
 **Workaround today:** keep conversations in the DM; use channels only as salute destinations.
 
