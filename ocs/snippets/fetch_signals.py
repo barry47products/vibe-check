@@ -33,8 +33,8 @@ def main(input, **kwargs):
     if mode == "ask_intent":
         slug = get_temp_state_key("vc_slug") or ""
         period = get_temp_state_key("vc_period_label") or ""
-        return block("STATED INTENT: (none on record - ask Barry)\n"
-                     f"NEEDS_INTENT for context '{slug}', period: {period}.")
+        head = f"NEEDS_INTENT for context '{slug}', period: {period}." if slug else f"NEEDS_INTENT period: {period}."
+        return block("STATED INTENT: (none on record - ask Barry)\n" + head)
 
     # --- check-in ---
     repos = get_temp_state_key("vc_repos") or []

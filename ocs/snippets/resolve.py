@@ -65,8 +65,11 @@ def main(input, **kwargs):
             return {"label": last_week_kw, "key": f"w-{since.date().isoformat()}", "since": since, "until": monday}
         return {"label": this_week_kw, "key": f"w-{monday.date().isoformat()}", "since": monday, "until": now}
 
-    def resolve_ctx(text, contexts, stored_active):
+    def contexts_in(text, contexts):
+        # Every context whose slug/name/word-token appears in the text (token match, so
+        # "docs" != "ocs"). Returns all matches in context order — the scope of a check-in.
         words = text.replace("-", " ").replace(",", " ").split()
+        found = []
         for ctx in contexts:
             slug = (ctx.get("slug") or "").lower()
             name = (ctx.get("name") or "").lower()
@@ -74,13 +77,41 @@ def main(input, **kwargs):
             for w in (slug + " " + name).replace("-", " ").split():
                 if len(w) > 2 and w not in keys:
                     keys.append(w)
+            hit = False
             for k in keys:
                 if k and k in words:
-                    return {"ctx": ctx, "matched": True}
+                    hit = True
+            if hit:
+                found.append(ctx)
+        return found
+
+    def active_or_first(contexts, active):
         for ctx in contexts:
-            if ctx.get("slug") == stored_active:
-                return {"ctx": ctx, "matched": False}
-        return {"ctx": contexts[0], "matched": False}
+            if ctx.get("slug") == active:
+                return ctx
+        return contexts[0]
+
+    def union_repos(scope):
+        repos = []
+        for ctx in scope:
+            for r in ctx.get("github", {}).get("repos", []):
+                if r not in repos:
+                    repos.append(r)
+        return repos
+
+    def scope_author(scope):
+        for ctx in scope:
+            handle = ctx.get("github", {}).get("author_handle", "")
+            if handle:
+                return handle
+        return author_handle
+
+    def scope_key(scope, win):
+        slugs = sorted([c.get("slug", "") for c in scope])
+        return win["key"] + "::" + "+".join(slugs)
+
+    def scope_label(scope):
+        return ", ".join([c.get("slug", "") for c in scope])
 
     def parse_add(text):
         # "add a context <name> [for|with|tracking|repo] <owner/repo or github URL>[, ...]"
@@ -148,45 +179,71 @@ def main(input, **kwargs):
         set_temp_state_key("vc_mode", "no_context")
         return "no_context"
 
-    resolved = resolve_ctx(low, contexts, pdata.get("active_context"))
-    ctx = resolved["ctx"]
-    slug = ctx.get("slug", "")
-    if resolved["matched"] and slug != pdata.get("active_context"):
-        set_participant_data_key("active_context", slug)
-
     explicit_period = parse_period(low)
-    if explicit_period:
+    awaiting = get_session_state_key("vc_awaiting") or ""
+    awaiting_scope = get_session_state_key("vc_awaiting_scope") or ""
+    awaiting_period = get_session_state_key("vc_awaiting_period") or ""
+    records = pdata.get("records", {})
+
+    # A non-redirecting turn while we're awaiting an intent answer = the answer itself.
+    # An explicit period in the turn means Barry is starting a fresh check-in instead.
+    answering = bool(awaiting) and (explicit_period is None)
+
+    # --- Period ---
+    if answering:
+        period = awaiting_period or this_week_kw
+    elif explicit_period:
         set_session_state_key("vc_last_period", explicit_period)
         period = explicit_period
     else:
-        period = get_session_state_key("vc_last_period") or "this week"
+        period = get_session_state_key("vc_last_period") or this_week_kw
     win = window_for(period, sast)
-    rec_key = f"{slug}|{win['key']}"
 
-    records = pdata.get("records", {})
-    intent_obj = records.get(rec_key, {}).get("intent")
-    awaiting = get_session_state_key("vc_awaiting")
-    is_command = ("vibe check" in low) or resolved["matched"] or (explicit_period is not None)
+    # --- Scope (one or more contexts) ---
+    # The scope is whatever Barry NAMES — in the check-in, or in his intent answer. We never
+    # pin a context he didn't choose: bare "last week" asks generically, and the answer (which
+    # names contexts) becomes the scope. Reflection then spans every context in scope.
+    named_here = contexts_in(low, contexts)
+    if answering:
+        if named_here:
+            scope = named_here
+        elif awaiting_scope:
+            scope = [c for c in contexts if c.get("slug") in awaiting_scope.split(",")]
+        else:
+            scope = [active_or_first(contexts, pdata.get("active_context"))]
+    elif named_here:
+        scope = named_here
+        if len(named_here) == 1 and named_here[0].get("slug") != pdata.get("active_context"):
+            set_participant_data_key("active_context", named_here[0].get("slug"))
+    else:
+        scope = []  # undecided — ask intent generically; the answer will pick scope
 
-    # The intent state machine: a non-command turn while awaiting = the intent answer -> store it.
-    if (not intent_obj) and awaiting == rec_key and not is_command:
+    set_temp_state_key("vc_slug", scope_label(scope))  # "" while scope is undecided
+    set_temp_state_key("vc_period_label", win["label"])
+
+    # --- Intent (stored per period + scope) ---
+    if answering:
+        rec_key = scope_key(scope, win)
         records[rec_key] = {"intent": {"stated": msg, "on_date": today_iso}}
         set_participant_data_key("records", records)
         set_session_state_key("vc_awaiting", "")
+        set_session_state_key("vc_awaiting_scope", "")
         intent_obj = records[rec_key]["intent"]
-
-    set_temp_state_key("vc_slug", slug)
-    set_temp_state_key("vc_period_label", win["label"])
+    elif scope:
+        intent_obj = records.get(scope_key(scope, win), {}).get("intent")
+    else:
+        intent_obj = None
 
     if not intent_obj:
-        set_session_state_key("vc_awaiting", rec_key)
+        set_session_state_key("vc_awaiting", "1")
+        set_session_state_key("vc_awaiting_scope", ",".join([c.get("slug", "") for c in scope]))
+        set_session_state_key("vc_awaiting_period", period)
         set_temp_state_key("vc_mode", "ask_intent")
         return "ask_intent"
 
-    gh = ctx.get("github", {})
     set_temp_state_key("vc_mode", "checkin")
-    set_temp_state_key("vc_repos", gh.get("repos", []))
-    set_temp_state_key("vc_author", gh.get("author_handle", ""))
+    set_temp_state_key("vc_repos", union_repos(scope))
+    set_temp_state_key("vc_author", scope_author(scope))
     set_temp_state_key("vc_intent", intent_obj.get("stated", ""))
     set_temp_state_key("vc_since_iso", to_iso(win["since"]))
     set_temp_state_key("vc_until_iso", to_iso(win["until"]))
