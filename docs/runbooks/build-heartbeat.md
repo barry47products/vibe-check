@@ -146,7 +146,11 @@ Add a **Code** node right after **Start**. Paste:
 
 ```python
 # Vibe Check — Resolve-HB (heartbeat front-router, OCS Code node)
-# Deterministic. Routes: reply | open | spine. Writes vc_hb_route to TEMP for the StaticRouter.
+# Grammar: addressing the bot IS the request; words only SCOPE it.
+#   no scope                 -> OPEN  (today's salute: yesterday, all contexts)
+#   period and/or context    -> SPINE (on-demand Mirror reflection on that scope)
+#   add/list context         -> SPINE (resolve.py handles context admin)
+#   reply while awaiting      -> REPLY (confirm / edit / day off)
 # Injected globals: get_participant_data, get_session_state_key, set_temp_state_key, datetime.
 # ruff: noqa: F821
 import datetime
@@ -160,10 +164,6 @@ def main(input, **kwargs):
 
     months = ["january", "february", "march", "april", "may", "june", "july",
               "august", "september", "october", "november", "december"]
-    # OPEN triggers only. Deliberately EXCLUDES confirmation words (yes/yep/sure/ok/...)
-    # -- those are handled by the REPLY branch. If a confirmation word were an OPEN
-    # trigger, a stray "yep" after a finished handshake would launch a brand-new heartbeat.
-    open_words = ["vibe check", "vibe-check", "check in", "checkin", "vc", "go", "ready"]
 
     def to_iso(moment):
         return moment.astimezone(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -174,6 +174,9 @@ def main(input, **kwargs):
     set_temp_state_key("vc_message", msg)
     set_temp_state_key("vc_available", available)
 
+    # scope detection: a reflection is requested only when the message names a period
+    # and/or a specific declared context. The product-named context never counts, so
+    # addressing the bot plainly always means "give me my check-in".
     has_period = ("yesterday" in low) or ("last week" in low) or ("this week" in low)
     for name in months:
         if name in low:
@@ -182,23 +185,29 @@ def main(input, **kwargs):
     for c in contexts:
         slug = (c.get("slug") or "").lower()
         cname = (c.get("name") or "").lower()
+        if slug in ("vibe-check", "vibe check") or cname in ("vibe check", "vibe-check"):
+            continue
         if (slug and slug in low) or (cname and cname in low):
             has_context = True
-    explicit_vibe = ("vibe check" in low) or ("vibe-check" in low)
+
+    is_manage = ("add a context" in low) or ("list context" in low) or low in ("contexts", "what contexts")
+    is_scoped = has_period or has_context or is_manage
 
     awaiting = get_session_state_key("vc_hb_awaiting")
 
-    # 1) reply to a pending draft: while a draft is pending, ANY reply that isn't an explicit
-    #    fresh "vibe check" is the confirm/edit -- even if it mentions a context or month name
-    #    (so an edit like "make it: shipped the OCS fix" stays a reply, not a new command).
-    if awaiting and not explicit_vibe:
+    # 1) reply to a pending draft (unless it's a fresh scoped/manage command)
+    if awaiting and not is_scoped:
         pending = get_session_state_key("vc_hb_pending_text") or ""
         set_temp_state_key("vc_hb_route", "reply")
         return f"REPLY_MESSAGE: {msg}\n\nPENDING_DRAFT: {pending}"
 
-    # 2) bare heartbeat open (nudge reply, or plain 'vibe check' with no period/context)
-    is_open = (not has_period) and (not has_context) and (("vibe check" in low) or (low in open_words))
-    if is_open and contexts:
+    # 2) scoped or context-admin -> the on-demand spine
+    if is_scoped:
+        set_temp_state_key("vc_hb_route", "spine")
+        return msg
+
+    # 3) default: plain address, no scope -> today's salute (heartbeat OPEN)
+    if contexts:
         day = (now - datetime.timedelta(days=1)).date()
         start = datetime.datetime(day.year, day.month, day.day, tzinfo=sast)
         end = start + datetime.timedelta(days=1)
@@ -224,14 +233,24 @@ def main(input, **kwargs):
         set_temp_state_key("vc_hb_route", "open")
         return msg
 
-    # 3) everything else -> the existing on-demand spine (untouched)
+    # no contexts yet -> let the spine onboard (resolve.py NO_CONTEXT)
     set_temp_state_key("vc_hb_route", "spine")
     return msg
 ```
 
-> **Note on routing rule:** a bare `vibe check` (no period, no context) is the **heartbeat**
-> (yesterday, all contexts, salute). `vibe check last week` or `vibe check ocs` keeps its V1
-> meaning and flows to the **spine** (the private Mirror). Tune `open_words` to taste.
+> **Routing rule — "address = ask; words only scope".** Addressing the bot (an `@mention` in a
+> channel, or any message in a DM) _is_ the request, so the **default is the salute**:
+>
+> | Message (after the mention is stripped) | Route | Result |
+> | --- | --- | --- |
+> | bare / `go` / `hi` / anything with no period or context | **open** | today's salute (yesterday, all contexts) |
+> | names a period or a specific context — `last week`, `ocs`, `may` | **spine** | reflection on that scope |
+> | `add a context …` / `list contexts` | **spine** | context admin (resolve.py) |
+> | a reply while a draft is pending | **reply** | confirm / edit / day off |
+>
+> The product-named `vibe-check` context is deliberately ignored in scope detection, so saying
+> "vibe check" (or just addressing the bot) never collides with a real context and always means
+> "give me my check-in." No trigger word to remember.
 >
 > **Deliberate simplification vs the design (§5).** The design draws a _cheap-LLM Router_ node
 > first (coarse `check-in-ish` vs `manage-context`). For the MVP that Router is **collapsed into
@@ -432,21 +451,22 @@ Wire **Reply · Close → Reply · Post → End**.
 
 In your bootstrapped DM thread:
 
-1. **Simulate the morning:** send `vibe check` (or wait for the scheduled nudge and reply `go`).
+1. **Simulate the morning:** just address the bot — `@VibeCheck` (channel) or `go` / `hi` (DM),
+   or wait for the scheduled nudge and reply.
    - Expect: it fetches yesterday across all contexts, drafts a 2-sentence salute, and asks
      _"Post it? yep / edit / day off"_. (`NO_CONTEXT`/empty → re-seed contexts;
-     `FETCH_ERROR` → GitHub token; the route went `spine` instead of `open` → you included a
-     period/context word, or `open_words` needs tuning.)
+     `FETCH_ERROR` → GitHub token; routed to `spine` instead of `open` → your message named a
+     period or context, which scopes it to a reflection.)
 2. **Approve:** reply `yep`.
    - Expect: it posts the salute to the team channel and confirms _"Posted… 🫡"_. Check the
      channel.
-3. **Edit path:** new turn → `vibe check` → reply with a rewrite, e.g.
+3. **Edit path:** new thread → address the bot → reply with a rewrite, e.g.
    _"make it: wrapped the embedding fix on OCS; Mulligans rollout starts Thursday"_.
    - Expect: it posts your edited wording.
-4. **Day-off path:** `vibe check` → `day off`.
+4. **Day-off path:** address the bot → `day off`.
    - Expect: _"enjoy the day off… nothing posted"_; channel unchanged.
-5. **On-demand still works:** `vibe check last week on ocs` → routes to the **spine** (the
-   private Mirror reflection), **not** the salute flow.
+5. **Reflection (scoped) still works:** `last week on ocs` (a period + context) → routes to the
+   **spine** (the private Mirror reflection), **not** the salute flow.
 6. **Stale/late drafts:** open a draft, don't confirm; next day open again → the new draft
    replaces the old (Stage overwrites `vc_hb_pending_*`). A late `yep` posts the _current_
    pending draft only.
