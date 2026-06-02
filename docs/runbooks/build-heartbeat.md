@@ -322,8 +322,9 @@ def main(input, **kwargs):
     set_session_state_key("vc_hb_awaiting", today)
     set_session_state_key("vc_hb_pending_date", today)
     set_session_state_key("vc_hb_pending_text", draft)
-    return ("Here's your salute for the team:\n\n" + draft +
-            "\n\nPost it? Reply *yep* to post, send edited wording to change it, "
+    return ("Here's what your activity shows for yesterday — a starting point, not a finished post:\n\n"
+            + draft +
+            "\n\nWhat would you add or change? Reply with anything I missed, *yep* to post as-is, "
             "or *day off* to skip.")
 ```
 
