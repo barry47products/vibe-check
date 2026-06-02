@@ -4,7 +4,7 @@
 # ruff: noqa: F821
 def main(input, **kwargs):
     channel = "C0B6S0T2NES"          # team channel id
-    auth_provider = "slack-vibe-check"
+    auth_provider = "slack-vibe-check-user"  # user token (xoxp) → posts as Barry, not the bot
     text = get_temp_state_key("vc_hb_post_text") or ""
     if not text.strip():
         return "Noted — enjoy the day off. Nothing posted. 🌴"
