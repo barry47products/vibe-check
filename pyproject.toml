@@ -36,6 +36,11 @@ ignore = ["PLR0913"]  # too-many-arguments — Pydantic models legitimately have
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["PLR2004"]  # magic-value-comparison is fine in tests
+# OCS Code-node snippets aren't a normal package: they run in a RestrictedPython sandbox as a
+# single `main` (no module-level helpers, injected globals like http/datetime, pasted into the
+# OCS UI). So statement/branch/complexity caps, line length, magic values, the datetime.UTC
+# alias (timezone.utc is the sandbox-safe form), and undefined-name (injected globals) don't fit.
+"ocs/snippets/**/*.py" = ["E501", "F821", "UP017", "PLR2004", "PLR0911", "PLR0912", "PLR0915", "C901"]
 
 [tool.mypy]
 strict = true
