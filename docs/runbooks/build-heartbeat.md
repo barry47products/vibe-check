@@ -147,8 +147,9 @@ Add a **Code** node right after **Start**. Paste:
 ```python
 # Vibe Check — Resolve-HB (heartbeat front-router, OCS Code node)
 # Grammar: addressing the bot IS the request; words only SCOPE it.
-#   no scope                 -> OPEN  (today's salute: yesterday, all contexts)
-#   period and/or context    -> SPINE (on-demand Mirror reflection on that scope)
+#   no scope                 -> OPEN  (gap-aware salute: yesterday, or since your last check-in)
+#   "this week" / "weekly"   -> OPEN  (weekly salute over all contexts)
+#   other period / a context -> SPINE (on-demand Mirror reflection on that scope)
 #   add/list context         -> SPINE (resolve.py handles context admin)
 #   reply while awaiting      -> REPLY (confirm / edit / day off)
 # Injected globals: get_participant_data, get_session_state_key, set_temp_state_key, datetime.
@@ -174,9 +175,8 @@ def main(input, **kwargs):
     set_temp_state_key("vc_message", msg)
     set_temp_state_key("vc_available", available)
 
-    # scope detection: a reflection is requested only when the message names a period
-    # and/or a specific declared context. The product-named context never counts, so
-    # addressing the bot plainly always means "give me my check-in".
+    # scope detection: a reflection is requested when the message names a specific period
+    # and/or a specific declared context. The product-named context never counts.
     has_period = ("yesterday" in low) or ("last week" in low) or ("this week" in low)
     for name in months:
         if name in low:
@@ -192,6 +192,9 @@ def main(input, **kwargs):
 
     is_manage = ("add a context" in low) or ("list context" in low) or low in ("contexts", "what contexts")
     is_scoped = has_period or has_context or is_manage
+    # "this week" / "weekly" with no specific context is a WEEKLY heartbeat over all contexts,
+    # not a single-context Mirror reflection.
+    is_weekly = (("this week" in low) or ("weekly" in low) or low == "week") and not has_context
 
     awaiting = get_session_state_key("vc_hb_awaiting")
 
@@ -201,16 +204,39 @@ def main(input, **kwargs):
         set_temp_state_key("vc_hb_route", "reply")
         return f"REPLY_MESSAGE: {msg}\n\nPENDING_DRAFT: {pending}"
 
-    # 2) scoped or context-admin -> the on-demand spine
-    if is_scoped:
-        set_temp_state_key("vc_hb_route", "spine")
-        return msg
+    # 2) OPEN window: weekly (this week), or gap-aware daily (yesterday, widened to cover a
+    #    break since your last check-in). Other scopes fall through to the Mirror (step 3).
+    open_mode = ""
+    if is_weekly:
+        open_mode = "weekly"
+    elif not is_scoped:
+        open_mode = "daily"
 
-    # 3) default: plain address, no scope -> today's salute (heartbeat OPEN)
-    if contexts:
-        day = (now - datetime.timedelta(days=1)).date()
-        start = datetime.datetime(day.year, day.month, day.day, tzinfo=sast)
-        end = start + datetime.timedelta(days=1)
+    if open_mode and contexts:
+        if open_mode == "weekly":
+            start = (now - datetime.timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+            end = now
+            since_date = start.date().isoformat()
+            until_date = now.date().isoformat()
+            label = "this week"
+        else:
+            yest = (now - datetime.timedelta(days=1)).date()
+            last = pdata.get("last_heartbeat_date") or ""
+            piece = last.split("-")
+            last_date = datetime.date(int(piece[0]), int(piece[1]), int(piece[2])) if len(piece) == 3 else None
+            gap = (now.date() - last_date).days if last_date else 1
+            if last_date and gap > 1:
+                start = datetime.datetime(last_date.year, last_date.month, last_date.day, tzinfo=sast)
+                end = now
+                since_date = last_date.isoformat()
+                until_date = now.date().isoformat()
+                label = f"since your last check-in on {last_date.isoformat()} ({gap} days)"
+            else:
+                start = datetime.datetime(yest.year, yest.month, yest.day, tzinfo=sast)
+                end = start + datetime.timedelta(days=1)
+                since_date = yest.isoformat()
+                until_date = yest.isoformat()
+                label = "yesterday"
         repos = []
         author = ""
         for c in contexts:
@@ -225,15 +251,15 @@ def main(input, **kwargs):
         set_temp_state_key("vc_author", author)
         set_temp_state_key("vc_since_iso", to_iso(start))
         set_temp_state_key("vc_until_iso", to_iso(end))
-        set_temp_state_key("vc_since_date", start.date().isoformat())
-        set_temp_state_key("vc_until_date", day.isoformat())
+        set_temp_state_key("vc_since_date", since_date)
+        set_temp_state_key("vc_until_date", until_date)
         set_temp_state_key("vc_slug", "all")
-        set_temp_state_key("vc_period_label", "yesterday")
+        set_temp_state_key("vc_period_label", label)
         set_temp_state_key("vc_intent", "(heartbeat - no reflection)")
         set_temp_state_key("vc_hb_route", "open")
         return msg
 
-    # no contexts yet -> let the spine onboard (resolve.py NO_CONTEXT)
+    # 3) scoped (other period/context) or context-admin, or no contexts -> the on-demand spine
     set_temp_state_key("vc_hb_route", "spine")
     return msg
 ```
@@ -243,8 +269,9 @@ def main(input, **kwargs):
 >
 > | Message (after the mention is stripped) | Route | Result |
 > | --- | --- | --- |
-> | bare / `go` / `hi` / anything with no period or context | **open** | today's salute (yesterday, all contexts) |
-> | names a period or a specific context — `last week`, `ocs`, `may` | **spine** | reflection on that scope |
+> | bare / `go` / `hi` / anything with no period or context | **open** | salute, **gap-aware**: yesterday, or _since your last check-in_ if you've been away |
+> | `this week` / `weekly` (no specific context) | **open** | **weekly** salute over all contexts |
+> | another period or a specific context — `last week`, `ocs`, `may` | **spine** | reflection on that scope |
 > | `add a context …` / `list contexts` | **spine** | context admin (resolve.py) |
 > | a reply while a draft is pending | **reply** | confirm / edit / day off |
 >
@@ -290,13 +317,15 @@ Add an **LLM** node (plain LLM, premium model, History Type **Global**). Paste t
 (no `{`/`}` — OCS treats braces as template variables):
 
 ```text
-You write Barry's short daily work salute for his team channel. You are given his real
-GitHub activity for yesterday across his projects (the SIGNALS block below).
+You write Barry's short work salute for his team channel. You are given his real GitHub
+activity (the SIGNALS block below). The block states the PERIOD it covers — it may be
+yesterday, a multi-day stretch since his last check-in, or this week. Write for that period.
 
-Write at most two sentences, first person, plain and warm. Name the projects and what
-actually moved — a merged PR, a fix shipped, an issue opened. Presence over volume: if the
-signals are thin or empty, say so honestly and briefly (e.g. a quiet day, or non-code work).
-Never invent activity beyond the signals. No hashtags, no emoji pile-ups, no preamble.
+Write two to three sentences, first person, plain and warm. Name the projects and what
+actually moved — a merged PR, a fix shipped, an issue opened. Over a longer period, group by
+theme rather than listing everything. Presence over volume: if the signals are thin or empty,
+say so honestly and briefly (e.g. a quiet stretch, or non-code work). Never invent activity
+beyond the signals. No hashtags, no emoji pile-ups, no preamble.
 
 Output only the salute text — nothing else.
 ```
@@ -309,8 +338,8 @@ Add a **Code** node named **`Open · Stage`**; paste:
 
 ```python
 # Vibe Check — Stage (OCS Code node). OPEN path, after Draft.
-# Saves the draft to SESSION state (the handshake) and asks Barry to confirm.
-# Injected globals: set_session_state_key, datetime.
+# Saves the draft to SESSION state (the handshake) and invites Barry to shape it.
+# Injected globals: get_temp_state_key, set_session_state_key, datetime.
 # ruff: noqa: F821
 import datetime
 
@@ -319,10 +348,11 @@ def main(input, **kwargs):
     sast = datetime.timezone(datetime.timedelta(hours=2))
     today = datetime.datetime.now(sast).date().isoformat()
     draft = (input or "").strip()
+    period = get_temp_state_key("vc_period_label") or "yesterday"
     set_session_state_key("vc_hb_awaiting", today)
     set_session_state_key("vc_hb_pending_date", today)
     set_session_state_key("vc_hb_pending_text", draft)
-    return ("Here's what your activity shows for yesterday — a starting point, not a finished post:\n\n"
+    return ("Here's what your activity shows for " + period + " — a starting point, not a finished post:\n\n"
             + draft +
             "\n\nWhat would you add or change? Reply with anything I missed, *yep* to post as-is, "
             "or *day off* to skip.")
