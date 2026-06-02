@@ -120,9 +120,9 @@ In the bot's **Events** area (the experiment's triggers/scheduled-messages UI), 
 **Scheduled Message** for your participant:
 
 - **Frequency / period:** every **1 day**.
-- **Prompt text** (what EventBot rephrases): `Greet Barry briefly and invite him to do his
-vibe check — tell him to reply and you'll pull yesterday's activity. One short, friendly
-sentence; vary the wording.`
+- **Prompt text** (what EventBot rephrases): the canonical wording is in
+  [`../../ocs/prompts/nudge.md`](../../ocs/prompts/nudge.md) — paste that. Keep it short; it's a
+  greeting, not the salute, and EventBot rewords/varies it.
 - **First trigger:** tomorrow at your chosen hour (e.g. 08:00 Africa/Johannesburg).
 
 > **Weekday-only upgrade (optional):** OCS scheduling is interval-based (no cron / weekday
@@ -132,6 +132,21 @@ sentence; vary the wording.`
 > **If there's no Events UI on your instance:** scheduled messages can be created via the API
 > or Django shell (`ScheduledMessage` + a `schedule_trigger` `EventAction` holding the params,
 > `apps/events/models.py:459`). Prefer the UI; drop to shell only if needed.
+
+**Updating the nudge later.** The nudge text lives on the `ScheduledMessage` records (in
+`custom_schedule_params["prompt_text"]`), **not** a pipeline node — so changing it needs **no
+publish**. Edit [`../../ocs/prompts/nudge.md`](../../ocs/prompts/nudge.md), then push it onto the
+live weekday schedules from the OCS repo:
+
+```bash
+uv run python manage.py shell -c "
+from apps.events.models import ScheduledMessage
+nudge = open('/path/to/Vibe Check/ocs/prompts/nudge.md').read().strip()
+for sm in ScheduledMessage.objects.filter(external_id__startswith='mvc-', cancelled_at__isnull=True):
+    p = sm.custom_schedule_params or {}; p['prompt_text'] = nudge
+    sm.custom_schedule_params = p; sm.save(update_fields=['custom_schedule_params'])
+"
+```
 
 ---
 
