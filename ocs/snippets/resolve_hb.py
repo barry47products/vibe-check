@@ -35,14 +35,17 @@ def main(input, **kwargs):
     words = low.replace(",", " ").replace(".", " ").split()
     ambiguous_months = ("may", "march")  # also everyday English words
     month_lead = ("in", "during", "for", "since", "over", "back")
-    for i, w in enumerate(words):
+    i = 0
+    for w in words:
         if w in months:
+            ok = True
             if w in ambiguous_months and len(words) > 1:
                 prev = words[i - 1] if i > 0 else ""
                 nxt = words[i + 1] if i + 1 < len(words) else ""
-                if not ((nxt.isdigit() and len(nxt) == 4) or prev in month_lead):
-                    continue
-            has_period = True
+                ok = (nxt.isdigit() and len(nxt) == 4) or (prev in month_lead)
+            if ok:
+                has_period = True
+        i = i + 1
     has_context = False
     for c in contexts:
         slug = (c.get("slug") or "").lower()

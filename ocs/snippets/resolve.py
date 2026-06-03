@@ -46,15 +46,18 @@ def main(input, **kwargs):
         if this_week_kw in text:
             return this_week_kw
         words = text.replace(",", " ").replace(".", " ").split()
-        for i, w in enumerate(words):
+        i = 0
+        for w in words:
             if w in months:
                 # "may"/"march" are verbs too — only a month when clearly a date.
+                ok = True
                 if w in ambiguous_months and len(words) > 1:
                     prev = words[i - 1] if i > 0 else ""
                     nxt = words[i + 1] if i + 1 < len(words) else ""
-                    if not ((nxt.isdigit() and len(nxt) == 4) or prev in month_lead):
-                        continue
-                return w
+                    ok = (nxt.isdigit() and len(nxt) == 4) or (prev in month_lead)
+                if ok:
+                    return w
+            i = i + 1
         return None
 
     def window_for(period, tz):
