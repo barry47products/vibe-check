@@ -50,7 +50,8 @@ Nothing is posted anywhere. The vibe is for him.
 | Destination | **Private DM only.** No posting, no user token, no channel. |
 | Default period | **Gap-aware** (since last vibe; widens across a break). |
 | First-ever vibe | **Last 7 days** (a richer baseline), then gap-aware after. |
-| First-run context | **Auto-discover** the PAT user's recently-pushed repos when no contexts exist (Fetch lists `/user/repos?sort=pushed`, capped at 4/run for the call budget). Contexts are optional — for named grouping / per-project scoping. |
+| First-run context | **Auto-discover** when no contexts exist — a dedicated **Discover** node ranks repos by **actual commit activity** (`search/commits`) unioned with recently-pushed repos (catches today's un-indexed work), top 5. A repo named in the message is fetched directly (exact name → only that repo; else fuzzy). Push-recency alone was rejected: it buried the 71-commit repo behind low-activity recently-pushed ones. Contexts remain optional for guaranteed scoping/grouping. |
+| Node split | **Discover** (rank/select repos, ≤2 calls) is separate from **Fetch** (per-repo signals, ≤10 calls) so each gets its own OCS call budget. |
 | Cadence | **Emergent** from response frequency; weekday nudge is just an invitation. |
 | Shape | **One summary, grouped by project** (only projects that moved). |
 | Gaps | Read **no-commit stretches as signal** ("focus was elsewhere"), not "nothing." |
@@ -66,7 +67,7 @@ A brand-new OCS experiment, **Vibe Check v2**, with a **linear 4-node pipeline**
 branches, no handshake:
 
 ```bash
-Start → Resolve → Fetch → Draft → End
+Start → Resolve → Discover → Fetch → Draft → End
 ```
 
 ### Node 1 — Resolve (Code)

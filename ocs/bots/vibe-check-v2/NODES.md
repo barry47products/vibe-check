@@ -9,7 +9,7 @@ Full design: [../../../docs/superpowers/specs/2026-06-03-vibe-check-v2-design.md
 ## Pipeline graph
 
 ```text
-[Start] → [Resolve] → [Fetch] → [Draft] → [End]
+[Start] → [Resolve] → [Discover] → [Fetch] → [Draft] → [End]
 ```
 
 ## Nodes
@@ -17,8 +17,11 @@ Full design: [../../../docs/superpowers/specs/2026-06-03-vibe-check-v2-design.md
 | Node | Type | File | Notes |
 | ---- | ---- | ---- | ----- |
 | Resolve | Code | [snippets/resolve.py](snippets/resolve.py) | period + scope + context admin; writes temp state |
-| Fetch | Code | [snippets/fetch.py](snippets/fetch.py) | GitHub signals for the window; `RELAY:` passthrough for admin |
+| Discover | Code | [snippets/discover.py](snippets/discover.py) | discovery mode only: ranks repos by commit activity (search/commits ∪ recent-push) + repo-name match; sets `vc_repos`. Passes through when contexts are configured. ≤2 calls |
+| Fetch | Code | [snippets/fetch.py](snippets/fetch.py) | per-repo GitHub signals for `vc_repos`; `RELAY:` passthrough for admin. ≤10 calls |
 | Draft | LLM | [prompts/draft.md](prompts/draft.md) | gpt-5.4-mini · Vibe Check OpenAI · **History = Global** · **no tools** |
+
+Splitting Discover from Fetch gives each node its **own 10-call budget**, so activity-ranking (Discover) and per-repo signal fetch (Fetch) don't compete.
 
 ## Auth provider
 
@@ -33,9 +36,10 @@ Resolve sets `vc_mode` and returns; Fetch and Draft branch on it in-line:
 
 ## Period & scope grammar
 
-- **No contexts configured →** Fetch auto-discovers the PAT user's recently-pushed repos within
-  the window (capped at 4/run for the call budget) and drafts from those. Contexts are optional —
-  add them only when you want named grouping or per-project scoping.
+- **No contexts configured →** Discover ranks your repos by **actual commit activity** in the
+  window (`search/commits`) unioned with recently-pushed repos (so today's not-yet-indexed work
+  still shows), top 5. Name a repo and it fetches that one — **exact name** wins (only that repo),
+  otherwise a fuzzy token match. Contexts are optional — add them for guaranteed scoping/grouping.
 - Bare `vibe check` → gap-aware window (since last vibe; first-ever = last 7 days), all contexts.
 - `vibe check last week` / `… yesterday` / `… in may` → that period.
 - `vibe check ocs` → that context only.
