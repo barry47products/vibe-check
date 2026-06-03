@@ -6,7 +6,8 @@
 #   other period / a context -> SPINE (on-demand Mirror reflection on that scope)
 #   add/list context         -> SPINE (resolve.py handles context admin)
 #   reply while awaiting      -> REPLY (confirm / edit / day off)
-# Injected globals: get_participant_data, get_session_state_key, set_temp_state_key, datetime.
+# Injected globals: get_participant_data, get_session_state_key, set_session_state_key,
+#                    set_temp_state_key, datetime.
 # ruff: noqa: F821
 import datetime
 
@@ -14,6 +15,7 @@ import datetime
 def main(input, **kwargs):
     sast = datetime.timezone(datetime.timedelta(hours=2))
     now = datetime.datetime.now(sast)
+    today_iso = now.date().isoformat()
     msg = input or ""
     low = msg.lower().strip()
 
@@ -30,8 +32,16 @@ def main(input, **kwargs):
     set_temp_state_key("vc_available", available)
 
     has_period = ("yesterday" in low) or ("last week" in low) or ("this week" in low)
-    for name in months:
-        if name in low:
+    words = low.replace(",", " ").replace(".", " ").split()
+    ambiguous_months = ("may", "march")  # also everyday English words
+    month_lead = ("in", "during", "for", "since", "over", "back")
+    for i, w in enumerate(words):
+        if w in months:
+            if w in ambiguous_months and len(words) > 1:
+                prev = words[i - 1] if i > 0 else ""
+                nxt = words[i + 1] if i + 1 < len(words) else ""
+                if not ((nxt.isdigit() and len(nxt) == 4) or prev in month_lead):
+                    continue
             has_period = True
     has_context = False
     for c in contexts:
@@ -53,6 +63,15 @@ def main(input, **kwargs):
         pending = get_session_state_key("vc_hb_pending_text") or ""
         set_temp_state_key("vc_hb_route", "reply")
         return f"REPLY_MESSAGE: {msg}\n\nPENDING_DRAFT: {pending}"
+
+    # Continuation: an on-demand reflection is live (same session + day) -> keep follow-ups on
+    # the spine, even ones with no period/context word, instead of re-routing them to a salute.
+    # A new explicit period or a manage command breaks out; a new day lets the lock go stale.
+    convo_scope = get_session_state_key("vc_convo_scope") or ""
+    convo_fresh = (get_session_state_key("vc_convo_date") or "") == today_iso
+    if convo_scope and convo_fresh and not has_period and not is_manage:
+        set_temp_state_key("vc_hb_route", "spine")
+        return msg
 
     # OPEN window: weekly, or gap-aware daily (yesterday, widened across a break)
     open_mode = ""
@@ -105,6 +124,7 @@ def main(input, **kwargs):
         set_temp_state_key("vc_slug", "all")
         set_temp_state_key("vc_period_label", label)
         set_temp_state_key("vc_intent", "(heartbeat - no reflection)")
+        set_session_state_key("vc_convo_scope", "")  # a salute supersedes any live reflection
         set_temp_state_key("vc_hb_route", "open")
         return msg
 

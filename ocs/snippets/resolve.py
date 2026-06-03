@@ -35,17 +35,26 @@ def main(input, **kwargs):
     yesterday_kw = "yesterday"
     last_week_kw = "last week"
     this_week_kw = "this week"
+    ambiguous_months = ("may", "march")  # also everyday English words
+    month_lead = ("in", "during", "for", "since", "over", "back")
 
     def parse_period(text):
-        for name in months:
-            if name in text:
-                return name
         if yesterday_kw in text:
             return yesterday_kw
         if last_week_kw in text:
             return last_week_kw
         if this_week_kw in text:
             return this_week_kw
+        words = text.replace(",", " ").replace(".", " ").split()
+        for i, w in enumerate(words):
+            if w in months:
+                # "may"/"march" are verbs too — only a month when clearly a date.
+                if w in ambiguous_months and len(words) > 1:
+                    prev = words[i - 1] if i > 0 else ""
+                    nxt = words[i + 1] if i + 1 < len(words) else ""
+                    if not ((nxt.isdigit() and len(nxt) == 4) or prev in month_lead):
+                        continue
+                return w
         return None
 
     def window_for(period, tz):
@@ -183,15 +192,27 @@ def main(input, **kwargs):
     awaiting = get_session_state_key("vc_awaiting") or ""
     awaiting_scope = get_session_state_key("vc_awaiting_scope") or ""
     awaiting_period = get_session_state_key("vc_awaiting_period") or ""
+    convo_scope = get_session_state_key("vc_convo_scope") or ""
+    convo_period = get_session_state_key("vc_convo_period") or ""
+    convo_fresh = (get_session_state_key("vc_convo_date") or "") == today_iso
     records = pdata.get("records", {})
 
     # A non-redirecting turn while we're awaiting an intent answer = the answer itself.
     # An explicit period in the turn means Barry is starting a fresh check-in instead.
     answering = bool(awaiting) and (explicit_period is None)
 
+    # Continuation lock: a reflection is already live (same session, same day) and this turn
+    # neither answers an intent question nor names a new period -> it's dialogue within that
+    # reflection. Keep the SAME scope + period so a follow-up (even one that mentions context
+    # names, like a correction) isn't re-scoped or re-routed. The lock breaks on a new explicit
+    # period, a manage command (handled above), or a new day.
+    continuing = bool(convo_scope) and convo_fresh and (not answering) and (explicit_period is None)
+
     # --- Period ---
     if answering:
         period = awaiting_period or this_week_kw
+    elif continuing:
+        period = convo_period or this_week_kw
     elif explicit_period:
         set_session_state_key("vc_last_period", explicit_period)
         period = explicit_period
@@ -202,9 +223,12 @@ def main(input, **kwargs):
     # --- Scope (one or more contexts) ---
     # The scope is whatever Barry NAMES — in the check-in, or in his intent answer. We never
     # pin a context he didn't choose: bare "last week" asks generically, and the answer (which
-    # names contexts) becomes the scope. Reflection then spans every context in scope.
+    # names contexts) becomes the scope. Reflection then spans every context in scope. While a
+    # reflection is live, follow-ups inherit its scope (continuing) rather than re-resolving.
     named_here = contexts_in(low, contexts)
-    if answering:
+    if continuing:
+        scope = [c for c in contexts if c.get("slug") in convo_scope.split(",")]
+    elif answering:
         if named_here:
             scope = named_here
         elif awaiting_scope:
@@ -241,6 +265,12 @@ def main(input, **kwargs):
         set_temp_state_key("vc_mode", "ask_intent")
         return "ask_intent"
 
+    # Deliver the check-in and arm the conversation lock so follow-ups continue this reflection.
+    set_session_state_key("vc_awaiting", "")
+    set_session_state_key("vc_convo_scope", ",".join([c.get("slug", "") for c in scope]))
+    set_session_state_key("vc_convo_period", period)
+    set_session_state_key("vc_convo_date", today_iso)
+    set_temp_state_key("vc_continue", "1" if continuing else "")
     set_temp_state_key("vc_mode", "checkin")
     set_temp_state_key("vc_repos", union_repos(scope))
     set_temp_state_key("vc_author", scope_author(scope))

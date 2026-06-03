@@ -99,4 +99,7 @@ def main(input, **kwargs):
         note = f"\n(NOTE: {len(dropped)} repo(s) not fetched due to the call budget: {', '.join(dropped)})"
     body = "\n".join(lines) if lines else "(no repos)"
     head = f"SIGNALS for context '{slug}', period: {period} ({since_date} to {until_date})"
+    if get_temp_state_key("vc_continue"):
+        head = ("CONTINUATION — Barry is still in this reflection; respond to his latest message "
+                "and build on what you've already said. Don't restart the summary.\n" + head)
     return block(f"STATED INTENT: {intent}\n{head}\n\n{body}{note}")
