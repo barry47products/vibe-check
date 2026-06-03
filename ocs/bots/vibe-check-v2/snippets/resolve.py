@@ -22,6 +22,10 @@ def main(input, **kwargs):
     this_week_kw = "this week"
     ambiguous_months = ("may", "march")
     month_lead = ("in", "during", "for", "since", "over", "back")
+    number_words = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7,
+                    "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12, "a": 1,
+                    "couple": 2, "few": 3, "several": 4}
+    span_units = ("day", "days", "week", "weeks")
 
     def to_iso(moment):
         return moment.astimezone(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -33,6 +37,18 @@ def main(input, **kwargs):
             return last_week_kw
         if this_week_kw in text:
             return this_week_kw
+        if "fortnight" in text:
+            return "days:14"
+        toks = text.replace("-", " ").replace(",", " ").replace(".", " ").split()
+        j = 0
+        for t in toks:
+            if t in span_units:
+                prev = toks[j - 1] if j > 0 else ""
+                n = int(prev) if prev.isdigit() else number_words.get(prev, 0)
+                if n > 0:
+                    mult = 7 if t[0] == "w" else 1
+                    return "days:" + str(n * mult)
+            j = j + 1
         words = text.replace(",", " ").replace(".", " ").split()
         i = 0
         for w in words:
@@ -48,6 +64,15 @@ def main(input, **kwargs):
         return None
 
     def window_for(period, tz, last_date):
+        if period.startswith("days:"):
+            n = int(period[5:])
+            since = now - datetime.timedelta(days=n)
+            if n % 7 == 0:
+                wks = n // 7
+                lbl = "the last " + str(wks) + (" week" if wks == 1 else " weeks")
+            else:
+                lbl = "the last " + str(n) + (" day" if n == 1 else " days")
+            return {"label": lbl, "since": since, "until": now}
         if period in months:
             num = months[period]
             year = now.year if datetime.datetime(now.year, num, 1, tzinfo=tz) <= now else now.year - 1
