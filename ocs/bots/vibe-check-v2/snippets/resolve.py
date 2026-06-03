@@ -164,11 +164,6 @@ def main(input, **kwargs):
         set_temp_state_key("vc_mode", "manage")
         return "manage"
 
-    if not contexts:
-        set_temp_state_key("vc_mode", "no_context")
-        set_temp_state_key("vc_reply", "You have no contexts yet. Add one, e.g. 'add a context ocs for dimagi/open-chat-studio'.")
-        return "no_context"
-
     explicit_period = parse_period(low)
     win_fresh = (get_session_state_key("vc_win_date") or "") == today_iso
     if (not explicit_period) and win_fresh:
@@ -193,24 +188,35 @@ def main(input, **kwargs):
         set_session_state_key("vc_win_label", label)
         set_session_state_key("vc_win_date", today_iso)
 
-    named = contexts_in(low, contexts)
-    if named:
-        scope = named
-        set_session_state_key("vc_last_scope", ",".join([c.get("slug", "") for c in named]))
-    elif win_fresh:
-        last_scope = get_session_state_key("vc_last_scope") or ""
-        scope = [c for c in contexts if c.get("slug") in last_scope.split(",")] if last_scope else contexts
+    if not contexts:
+        # No contexts configured -> Fetch auto-discovers recently-pushed repos via the PAT.
+        set_temp_state_key("vc_discover", "1")
+        repos_out = []
+        author_out = author_handle
+        slug_label = "your recent work"
     else:
-        scope = contexts
-        set_session_state_key("vc_last_scope", "")
-    if not scope:
-        scope = contexts
+        set_temp_state_key("vc_discover", "")
+        named = contexts_in(low, contexts)
+        if named:
+            scope = named
+            set_session_state_key("vc_last_scope", ",".join([c.get("slug", "") for c in named]))
+        elif win_fresh:
+            last_scope = get_session_state_key("vc_last_scope") or ""
+            scope = [c for c in contexts if c.get("slug") in last_scope.split(",")] if last_scope else contexts
+        else:
+            scope = contexts
+            set_session_state_key("vc_last_scope", "")
+        if not scope:
+            scope = contexts
+        repos_out = union_repos(scope)
+        author_out = scope_author(scope, author_handle)
+        slug_label = ", ".join([c.get("slug", "") for c in scope])
 
     set_participant_data_key("last_vibe_date", today_iso)
     set_temp_state_key("vc_mode", "checkin")
-    set_temp_state_key("vc_repos", union_repos(scope))
-    set_temp_state_key("vc_author", scope_author(scope, author_handle))
-    set_temp_state_key("vc_slug", ", ".join([c.get("slug", "") for c in scope]))
+    set_temp_state_key("vc_repos", repos_out)
+    set_temp_state_key("vc_author", author_out)
+    set_temp_state_key("vc_slug", slug_label)
     set_temp_state_key("vc_period_label", label)
     set_temp_state_key("vc_since_iso", since_iso)
     set_temp_state_key("vc_until_iso", until_iso)

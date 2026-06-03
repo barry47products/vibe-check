@@ -50,6 +50,7 @@ Nothing is posted anywhere. The vibe is for him.
 | Destination | **Private DM only.** No posting, no user token, no channel. |
 | Default period | **Gap-aware** (since last vibe; widens across a break). |
 | First-ever vibe | **Last 7 days** (a richer baseline), then gap-aware after. |
+| First-run context | **Auto-discover** the PAT user's recently-pushed repos when no contexts exist (Fetch lists `/user/repos?sort=pushed`, capped at 4/run for the call budget). Contexts are optional — for named grouping / per-project scoping. |
 | Cadence | **Emergent** from response frequency; weekday nudge is just an invitation. |
 | Shape | **One summary, grouped by project** (only projects that moved). |
 | Gaps | Read **no-commit stretches as signal** ("focus was elsewhere"), not "nothing." |
@@ -64,7 +65,7 @@ Nothing is posted anywhere. The vibe is for him.
 A brand-new OCS experiment, **Vibe Check v2**, with a **linear 4-node pipeline** — no router, no
 branches, no handshake:
 
-```
+```bash
 Start → Resolve → Fetch → Draft → End
 ```
 
@@ -151,7 +152,7 @@ grouped-by-project draft prompt, the `add/list context` parser, and the month-pa
 
 A per-bot, versioned folder, leaving v1 files in place:
 
-```
+```bash
 ocs/bots/vibe-check-v2/
   snippets/
     resolve.py
@@ -165,6 +166,7 @@ ocs/bots/vibe-check-v2/
 ## Testing
 
 OCS sandbox code nodes can't be unit-tested in OCS, so before each publish:
+
 - **Compile-check** every snippet (`py_compile`).
 - **Sandbox-safety scan** — flag `enumerate`/`zip`/`map` and other RestrictedPython gaps.
 - **Scripted manual DM scenarios:** gap-aware default; `vibe check last week`; `vibe check ocs`; a

@@ -33,6 +33,9 @@ Resolve sets `vc_mode` and returns; Fetch and Draft branch on it in-line:
 
 ## Period & scope grammar
 
+- **No contexts configured →** Fetch auto-discovers the PAT user's recently-pushed repos within
+  the window (capped at 4/run for the call budget) and drafts from those. Contexts are optional —
+  add them only when you want named grouping or per-project scoping.
 - Bare `vibe check` → gap-aware window (since last vibe; first-ever = last 7 days), all contexts.
 - `vibe check last week` / `… yesterday` / `… in may` → that period.
 - `vibe check ocs` → that context only.

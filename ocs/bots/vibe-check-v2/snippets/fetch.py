@@ -22,6 +22,21 @@ def main(input, **kwargs):
     since_date = get_temp_state_key("vc_since_date")
     until_date = get_temp_state_key("vc_until_date")
 
+    if get_temp_state_key("vc_discover"):
+        # No contexts configured: discover the PAT user's repos pushed within the window.
+        # Capped at 4 to stay within the 10-call budget (1 list + 4 x 2 per-repo calls).
+        listing = http.get("https://api.github.com/user/repos",
+                           params={"sort": "pushed", "direction": "desc", "per_page": 30,
+                                   "affiliation": "owner,collaborator,organization_member"},
+                           headers=accept, auth=auth_provider, timeout=15)
+        if listing["is_success"]:
+            for r in (listing["json"] or []):
+                pushed = (r.get("pushed_at", "") or "")[:10]
+                full = r.get("full_name", "") or ""
+                if full and since_date and pushed >= since_date and full not in repos:
+                    repos.append(full)
+        repos = repos[:4]
+
     def repo_lines(repo):
         commits = http.get("https://api.github.com/repos/" + repo + "/commits",
                            params={"author": author, "since": since_iso, "until": until_iso, "per_page": 100},
