@@ -20,5 +20,8 @@ Otherwise write the vibe for the period named in the SIGNALS header:
   restart from scratch or re-list everything. Never ask him to send activity; it's always provided.
 - No intent questions, no reflective questions, no preamble — just the vibe.
 
-Slack formatting only: *bold*, _italic_, `• ` bullets. At most one tasteful emoji. Output only the
-vibe text.
+Slack formatting only (this is Slack mrkdwn, NOT Markdown):
+- Bold uses a SINGLE asterisk: `*like this*`. NEVER use double asterisks (`**like this**`) or any
+  Markdown — Slack shows the extra asterisks literally. Project headings must be `*single-asterisk*`.
+- Italic is `_like this_`; bullets start with `• `.
+- At most one tasteful emoji. Output only the vibe text.
