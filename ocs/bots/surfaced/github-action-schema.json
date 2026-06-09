@@ -1,0 +1,66 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "GitHub (Surfaced)",
+    "version": "1.0.0",
+    "description": "Read-only GitHub access for the Surfaced agent. Authenticated via the github-vibe-check Bearer PAT."
+  },
+  "servers": [
+    { "url": "https://api.github.com" }
+  ],
+  "paths": {
+    "/search/commits": {
+      "get": {
+        "operationId": "searchCommits",
+        "summary": "Rank work by activity. Search commits across all repos by author in a date window. Use q like 'author:barry47products author-date:>=2026-05-20'. Returns items[].repository.full_name — group/count to find where the work landed.",
+        "parameters": [
+          { "name": "q", "in": "query", "required": true, "schema": { "type": "string" }, "description": "Query, e.g. author:barry47products author-date:>=2026-05-20" },
+          { "name": "per_page", "in": "query", "schema": { "type": "integer" }, "description": "Max 100" },
+          { "name": "sort", "in": "query", "schema": { "type": "string" } },
+          { "name": "order", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Commit search results" } }
+      }
+    },
+    "/search/issues": {
+      "get": {
+        "operationId": "searchIssuesAndPRs",
+        "summary": "Find pull requests and issues by author. q like 'author:barry47products type:pr created:>=2026-05-20', optionally add 'repo:owner/name'. Always pull PRs alongside commits.",
+        "parameters": [
+          { "name": "q", "in": "query", "required": true, "schema": { "type": "string" }, "description": "Query, e.g. author:barry47products type:pr created:>=2026-05-20" },
+          { "name": "per_page", "in": "query", "schema": { "type": "integer" } },
+          { "name": "sort", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Issue/PR search results" } }
+      }
+    },
+    "/repos/{owner}/{repo}/commits": {
+      "get": {
+        "operationId": "listRepoCommits",
+        "summary": "List commits on a repo's default branch. Filter with author + since/until (ISO 8601). Default branch only.",
+        "parameters": [
+          { "name": "owner", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "repo", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "author", "in": "query", "schema": { "type": "string" }, "description": "GitHub login to filter by (e.g. barry47products)" },
+          { "name": "since", "in": "query", "schema": { "type": "string" }, "description": "ISO 8601, e.g. 2026-05-20T00:00:00Z" },
+          { "name": "until", "in": "query", "schema": { "type": "string" } },
+          { "name": "per_page", "in": "query", "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Commit list" } }
+      }
+    },
+    "/user/repos": {
+      "get": {
+        "operationId": "listMyRepos",
+        "summary": "List repos the authenticated user can access, newest-pushed first. Use to discover candidate repos.",
+        "parameters": [
+          { "name": "sort", "in": "query", "schema": { "type": "string" }, "description": "e.g. pushed" },
+          { "name": "direction", "in": "query", "schema": { "type": "string" } },
+          { "name": "per_page", "in": "query", "schema": { "type": "integer" } },
+          { "name": "affiliation", "in": "query", "schema": { "type": "string" }, "description": "owner,collaborator,organization_member" }
+        ],
+        "responses": { "200": { "description": "Repo list" } }
+      }
+    }
+  }
+}
